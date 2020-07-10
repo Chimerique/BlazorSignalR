@@ -1,0 +1,86 @@
+@page "/livedata"
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime;
+
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<h1>SignalR &Aacute; Blazor</h1>
+
+<p>Live data is pushed by the server through SignalR and update the chart by invoking a JS library (tradingview light). </p>
+<p>Fields are updated with blazor. </p>
+
+@*<button type="button" class="btn btn-primary" @onclick="SetChart">
+    Set Chart
+</button>*@
+
+<p class="mt-2" style="font-size:1.6em">
+    <span class="badge badge-success">
+        @convertedText
+    </span>
+</p>
+<p class="mt-2" style="font-size:1.6em">
+    <span class="badge badge-success">
+        @count
+    </span>
+</p>
+
+<div id="lightChart">
+
+</div>
+
+@code {
+    int count = 0;
+    HubConnection hubConnection;
+    MarkupString convertedText = new MarkupString("");
+
+    public bool IsConnected => hubConnection.State == HubConnectionState.Connected;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeAsync<string>("setChart", "lightChart");
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/charthub"))
+                .Build();
+
+            //Subscribe to signal r updates
+            hubConnection.On<string>("UpdateChart", async (data) =>
+            {
+                count++;
+                try
+                {
+                    //Call tradingview chart to update data
+                    var text = await JSRuntime.InvokeAsync<string>("addChartData", data);
+
+                    convertedText = new MarkupString(text);
+                }
+                catch(Exception e)
+                {
+                    convertedText = new MarkupString(e.Message);
+                }
+                StateHasChanged();
+            });
+
+            await hubConnection.StartAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _ = hubConnection.DisposeAsync();
+    }
+
+    //private async Task SetChart()
+    //{
+    //    //var data = new[]{new { time= "2019-04-11", value= 80.01 },
+    //    //    new { time= "2019-04-12", value= 96.63}};
+    //    //09/07/2020 16:31:25", "value": 696,6765725084935
+    //    var data = "[{ \"time\": \"01/01/2020 16:31:25\", \"value\": 80.01 },{ \"time\": \"02/01/2020\", \"value\": 96.63 },{ \"time\": \"03/01/2020\", \"value\": 91.63 },{ \"time\": \"04/01/2020\", \"value\": 92.63 }]";
+
+    //    await JSRuntime.InvokeAsync<string>("addChartData", data);
+    //}
+}
